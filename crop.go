@@ -86,11 +86,13 @@ type Score struct {
 
 // Crop contains results
 type Crop struct {
-	X      int
-	Y      int
-	Width  int
-	Height int
-	Score  Score
+	X         int
+	Y         int
+	Width     int
+	Height    int
+	BestFaceX int
+	BestFaceY int
+	Score     Score
 }
 
 //CropSettings contains options to
@@ -178,7 +180,7 @@ func (o openCVAnalyzer) FindBestCrop(img image.Image, width, height int) (Crop, 
 		log.Printf("scale: %f, cropw: %f, croph: %f, minscale: %f\n", scale, cropWidth, cropHeight, realMinScale)
 	}
 
-	topCrop, err := analyse(o.cropSettings, lowimg, cropWidth, cropHeight, realMinScale)
+	topCrop, err := analyse(o.cropSettings, lowimg, cropWidth, cropHeight, realMinScale, scale)
 	if err != nil {
 		return topCrop, err
 	}
@@ -248,9 +250,6 @@ func score(output *image.Image, crop *Crop) Score {
 	for y := 0; y <= height-scoreDownSample; y += scoreDownSample {
 		for x := 0; x <= width-scoreDownSample; x += scoreDownSample {
 
-			//for y := 0; y < height; y++ {
-			//for x := 0; x < width; x++ {
-
 			r, g, b, _ := (*output).At(x, y).RGBA()
 
 			r8 := float64(r >> 8)
@@ -296,7 +295,7 @@ func drawDebugCrop(topCrop *Crop, o *image.Image) {
 	}
 }
 
-func analyse(settings CropSettings, img image.Image, cropWidth, cropHeight, realMinScale float64) (Crop, error) {
+func analyse(settings CropSettings, img image.Image, cropWidth, cropHeight, realMinScale, scale float64) (Crop, error) {
 	o := image.Image(image.NewRGBA(img.Bounds()))
 
 	now := time.Now()
@@ -305,11 +304,13 @@ func analyse(settings CropSettings, img image.Image, cropWidth, cropHeight, real
 		log.Println("Time elapsed edge:", time.Since(now))
 	}
 
+	var faceX, faceY int
 	debugOutput(settings.DebugMode, &o, "edge")
 
 	now = time.Now()
 	if settings.FaceDetection {
-		err := faceDetect(settings, img, o)
+		var err error
+		faceX, faceY, err = faceDetect(settings, img, o)
 
 		if err != nil {
 			return Crop{}, err
@@ -366,6 +367,8 @@ func analyse(settings CropSettings, img image.Image, cropWidth, cropHeight, real
 		debugOutput(true, &o, "final")
 	}
 
+	topCrop.BestFaceX = int(float64(faceX) * scale)
+	topCrop.BestFaceY = int(float64(faceY) * scale)
 	return topCrop, nil
 }
 
@@ -441,7 +444,6 @@ func edgeDetect(i image.Image, o image.Image) {
 			var lightness float64
 
 			if x == 0 || x >= w-1 || y == 0 || y >= h-1 {
-				//lightness = cie((*i).At(x, y))
 				lightness = 0
 			} else {
 				lightness = cies[y*w+x]*4.0 -
@@ -457,12 +459,12 @@ func edgeDetect(i image.Image, o image.Image) {
 	}
 }
 
-func faceDetect(settings CropSettings, i image.Image, o image.Image) error {
+func faceDetect(settings CropSettings, i image.Image, o image.Image) (int, int, error) {
 
 	cvImage := opencv.FromImage(i)
 	_, err := os.Stat(settings.FaceDetectionHaarCascadeFilepath)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
 	cascade := opencv.LoadHaarClassifierCascade(settings.FaceDetectionHaarCascadeFilepath)
 	faces := cascade.DetectObjects(cvImage)
@@ -474,8 +476,10 @@ func faceDetect(settings CropSettings, i image.Image, o image.Image) error {
 	}
 
 	if len(faces) == 0 {
-		return ErrNoFacesFound
+		return 0, 0, ErrNoFacesFound
 	}
+
+	var faceX, faceY int
 
 	for _, face := range faces {
 		if settings.DebugMode == true {
@@ -489,8 +493,11 @@ func faceDetect(settings CropSettings, i image.Image, o image.Image) error {
 			float64(face.Height())/2)
 		gc.SetFillColor(color.RGBA{255, 0, 0, 255})
 		gc.Fill()
+
+		faceX, faceY = face.X(), face.Y()
 	}
-	return nil
+
+	return faceX, faceY, nil
 }
 
 func skinDetect(i image.Image, o image.Image) {
