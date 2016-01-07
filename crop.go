@@ -155,7 +155,9 @@ func (o openCVAnalyzer) FindBestCrop(img image.Image, width, height int) (Crop, 
 			prescalefactor = f
 		}
 
-		log.Println(prescalefactor)
+		if o.cropSettings.DebugMode {
+			log.Println(prescalefactor)
+		}
 
 		lowimg = resize.Resize(
 			uint(float64(img.Bounds().Size().X)*prescalefactor),
@@ -299,7 +301,10 @@ func analyse(settings CropSettings, img image.Image, cropWidth, cropHeight, real
 
 	now := time.Now()
 	edgeDetect(img, o)
-	log.Println("Time elapsed edge:", time.Since(now))
+	if settings.DebugMode {
+		log.Println("Time elapsed edge:", time.Since(now))
+	}
+
 	debugOutput(settings.DebugMode, &o, "edge")
 
 	now = time.Now()
@@ -310,35 +315,50 @@ func analyse(settings CropSettings, img image.Image, cropWidth, cropHeight, real
 			return Crop{}, err
 		}
 
-		log.Println("Time elapsed face:", time.Since(now))
+		if settings.DebugMode {
+			log.Println("Time elapsed face:", time.Since(now))
+		}
+
 		debugOutput(settings.DebugMode, &o, "face")
 	} else {
 		skinDetect(img, o)
-		log.Println("Time elapsed skin:", time.Since(now))
-		debugOutput(settings.DebugMode, &o, "skin")
+		if settings.DebugMode {
+			log.Println("Time elapsed skin:", time.Since(now))
+			debugOutput(settings.DebugMode, &o, "skin")
+		}
 	}
 
 	now = time.Now()
 	saturationDetect(img, o)
-	log.Println("Time elapsed sat:", time.Since(now))
-	debugOutput(settings.DebugMode, &o, "saturation")
+	if settings.DebugMode {
+		log.Println("Time elapsed sat:", time.Since(now))
+		debugOutput(settings.DebugMode, &o, "saturation")
+
+	}
 
 	now = time.Now()
 	var topCrop Crop
 	topScore := -1.0
 	cs := crops(o, cropWidth, cropHeight, realMinScale)
-	log.Println("Time elapsed crops:", time.Since(now), len(cs))
+
+	if settings.DebugMode {
+		log.Println("Time elapsed crops:", time.Since(now), len(cs))
+	}
 
 	now = time.Now()
 	for _, crop := range cs {
 		nowIn := time.Now()
 		crop.Score = score(&o, &crop)
-		log.Println("Time elapsed single-score:", time.Since(nowIn))
+		if settings.DebugMode {
+			log.Println("Time elapsed single-score:", time.Since(nowIn))
+		}
+
 		if crop.Score.Total > topScore {
 			topCrop = crop
 			topScore = crop.Score.Total
 		}
 	}
+
 	log.Println("Time elapsed score:", time.Since(now))
 
 	if settings.DebugMode {
