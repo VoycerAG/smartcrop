@@ -36,10 +36,12 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/nfnt/resize"
 )
 
 var (
-	testFile = "./samples/gopher.jpg"
+	testFile = "./samples/65131509.jpg"
 )
 
 type SubImager interface {
@@ -55,7 +57,17 @@ func TestCrop(t *testing.T) {
 		t.Error(err)
 	}
 
-	topCrop, err := SmartCrop(img, 250, 0)
+	cropSettings := CropSettings{
+		FaceDetection:                    true,
+		FaceDetectionHaarCascadeFilepath: "./testfiles/haarcascade_frontalface_alt.xml",
+		InterpolationType:                resize.Bicubic,
+		DebugMode:                        false,
+		Prescale:                         true,
+		PrescaleValue:                    400,
+	}
+
+	analyzer := NewAnalyzerWithCropSettings(cropSettings)
+	topCrop, err := analyzer.FindBestCrop(img, 250, 100)
 	if err != nil {
 		t.Error(err)
 	}

@@ -71,6 +71,11 @@ const (
 	ruleOfThirds      = true
 )
 
+var (
+	//ErrNoFacesFound this error will be produced if no face could be found in the image
+	ErrNoFacesFound = errors.New("No faces found")
+)
+
 // Score contains values that classify matches
 type Score struct {
 	Detail     float64
@@ -446,6 +451,10 @@ func faceDetect(settings CropSettings, i image.Image, o image.Image) error {
 
 	if settings.DebugMode == true {
 		log.Println("Faces detected:", len(faces))
+	}
+
+	if len(faces) == 0 {
+		return ErrNoFacesFound
 	}
 
 	for _, face := range faces {
