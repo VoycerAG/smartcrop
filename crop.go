@@ -84,15 +84,22 @@ type Score struct {
 	Total      float64
 }
 
+// Face that was found
+type Face struct {
+	X      int
+	Y      int
+	Width  int
+	Height int
+}
+
 // Crop contains results
 type Crop struct {
-	X         int
-	Y         int
-	Width     int
-	Height    int
-	BestFaceX int
-	BestFaceY int
-	Score     Score
+	X      int
+	Y      int
+	Width  int
+	Height int
+	Faces  []Face
+	Score  Score
 }
 
 //CropSettings contains options to
@@ -304,13 +311,13 @@ func analyse(settings CropSettings, img image.Image, cropWidth, cropHeight, real
 		log.Println("Time elapsed edge:", time.Since(now))
 	}
 
-	var faceX, faceY int
+	var faces []Face
 	debugOutput(settings.DebugMode, &o, "edge")
 
 	now = time.Now()
 	if settings.FaceDetection {
 		var err error
-		faceX, faceY, err = faceDetect(settings, img, o)
+		faces, err = faceDetect(settings, img, o, scale)
 
 		if err != nil {
 			return Crop{}, err
@@ -367,8 +374,7 @@ func analyse(settings CropSettings, img image.Image, cropWidth, cropHeight, real
 		debugOutput(true, &o, "final")
 	}
 
-	topCrop.BestFaceX = int(float64(faceX) * scale)
-	topCrop.BestFaceY = int(float64(faceY) * scale)
+	topCrop.Faces = faces
 	return topCrop, nil
 }
 
@@ -459,13 +465,13 @@ func edgeDetect(i image.Image, o image.Image) {
 	}
 }
 
-func faceDetect(settings CropSettings, i image.Image, o image.Image) (int, int, error) {
-
+func faceDetect(settings CropSettings, i image.Image, o image.Image, scale float64) ([]Face, error) {
 	cvImage := opencv.FromImage(i)
 	_, err := os.Stat(settings.FaceDetectionHaarCascadeFilepath)
 	if err != nil {
-		return 0, 0, err
+		return []Face{}, err
 	}
+
 	cascade := opencv.LoadHaarClassifierCascade(settings.FaceDetectionHaarCascadeFilepath)
 	faces := cascade.DetectObjects(cvImage)
 
@@ -476,10 +482,10 @@ func faceDetect(settings CropSettings, i image.Image, o image.Image) (int, int, 
 	}
 
 	if len(faces) == 0 {
-		return 0, 0, ErrNoFacesFound
+		return []Face{}, ErrNoFacesFound
 	}
 
-	var faceX, faceY int
+	resultFaces := []Face{}
 
 	for _, face := range faces {
 		if settings.DebugMode == true {
@@ -494,10 +500,14 @@ func faceDetect(settings CropSettings, i image.Image, o image.Image) (int, int, 
 		gc.SetFillColor(color.RGBA{255, 0, 0, 255})
 		gc.Fill()
 
-		faceX, faceY = face.X(), face.Y()
+		x := int(float64(face.X()) * scale)
+		y := int(float64(face.Y()) * scale)
+		width := int(float64(face.Width()) * scale)
+		height := int(float64(face.Height()) * scale)
+		resultFaces = append(resultFaces, Face{X: x, Y: y, Width: width, Height: height})
 	}
 
-	return faceX, faceY, nil
+	return resultFaces, nil
 }
 
 func skinDetect(i image.Image, o image.Image) {
